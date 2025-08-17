@@ -14,6 +14,23 @@ const categoryFilter = document.getElementById('categoryFilter');
 const newQuoteText = document.getElementById('newQuoteText');
 const newQuoteCategory = document.getElementById('newQuoteCategory');
 
+// Create and return the form for adding new quotes
+function createAddQuoteForm() {
+  const form = document.createElement('div');
+  form.className = 'quote-form';
+  form.innerHTML = `
+    <h3>Add New Quote</h3>
+    <div>
+      <input id="newQuoteText" type="text" placeholder="Enter a new quote" required />
+    </div>
+    <div style="margin-top: 10px;">
+      <input id="newQuoteCategory" type="text" placeholder="Enter quote category" required />
+    </div>
+    <button onclick="addQuote()">Add Quote</button>
+  `;
+  return form;
+}
+
 // Initialize the application
 function init() {
   // Add event listeners
@@ -22,6 +39,10 @@ function init() {
   
   // Initialize categories dropdown
   updateCategoryFilter();
+  
+  // Create and append the form
+  const form = createAddQuoteForm();
+  document.body.appendChild(form);
   
   // Show initial quote
   showRandomQuote();
