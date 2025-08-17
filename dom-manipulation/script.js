@@ -4,29 +4,84 @@ const SESSION_KEY = 'lastViewedQuote';
 const LAST_SYNC_KEY = 'lastSyncTime';
 const SERVER_SYNC_INTERVAL = 30000; // 30 seconds
 
-// Server simulation (in a real app, this would be API endpoints)
+// Server API simulation
 const serverApi = {
-  async getQuotes() {
-    try {
-      const response = await fetch('https://jsonplaceholder.typicode.com/posts')
-        .then(res => res.json());
-      return response.map(post => ({
-        id: post.id,
-        text: post.title,
-        category: 'Server',
-        source: 'server',
-        version: 1
-      }));
-    } catch (error) {
-      console.error('Failed to fetch from server:', error);
-      return [];
-    }
+  // In-memory storage for our mock server
+  _data: [
+    { id: 1, text: "The only way to do great work is to love what you do.", category: "Motivation", version: 1, updatedAt: new Date().toISOString() },
+    { id: 2, text: "Innovation distinguishes between a leader and a follower.", category: "Business", version: 1, updatedAt: new Date().toISOString() },
+    { id: 3, text: "The future belongs to those who believe in the beauty of their dreams.", category: "Inspiration", version: 1, updatedAt: new Date().toISOString() },
+    { id: 4, text: "Success is not final, failure is not fatal: It is the courage to continue that counts.", category: "Success", version: 1, updatedAt: new Date().toISOString() },
+    { id: 5, text: "The only limit to our realization of tomorrow is our doubts of today.", category: "Inspiration", version: 1, updatedAt: new Date().toISOString() }
+  ],
+  
+  // Simulate network delay
+  _simulateNetwork() {
+    return new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
   },
   
-  async syncQuotes(quotes) {
-    // In a real app, this would send updates to the server
-    console.log('Syncing quotes with server:', quotes);
-    return { success: true };
+  // Fetch all quotes from server
+  async getQuotes() {
+    await this._simulateNetwork();
+    // Simulate occasional server error (10% chance)
+    if (Math.random() < 0.1) {
+      throw new Error('Failed to fetch quotes: Server error');
+    }
+    return JSON.parse(JSON.stringify(this._data));
+  },
+  
+  // Add a new quote to server
+  async addQuote(quote) {
+    await this._simulateNetwork();
+    const newQuote = {
+      ...quote,
+      id: this._data.length > 0 ? Math.max(...this._data.map(q => q.id)) + 1 : 1,
+      version: 1,
+      updatedAt: new Date().toISOString()
+    };
+    this._data.push(newQuote);
+    return { ...newQuote };
+  },
+  
+  // Update an existing quote on server
+  async updateQuote(id, updates) {
+    await this._simulateNetwork();
+    const index = this._data.findIndex(q => q.id === id);
+    if (index === -1) throw new Error('Quote not found');
+    
+    const updatedQuote = {
+      ...this._data[index],
+      ...updates,
+      version: (this._data[index].version || 1) + 1,
+      updatedAt: new Date().toISOString()
+    };
+    
+    this._data[index] = updatedQuote;
+    return { ...updatedQuote };
+  },
+  
+  // Sync local changes with server
+  async syncQuotes(localQuotes) {
+    await this._simulateNetwork();
+    const serverQuotes = await this.getQuotes();
+    const localMap = new Map(localQuotes.map(q => [q.id, q]));
+    
+    // Update server with local changes
+    for (const localQuote of localQuotes) {
+      const serverQuote = serverQuotes.find(q => q.id === localQuote.id);
+      
+      if (!serverQuote) {
+        // New quote - add to server
+        await this.addQuote(localQuote);
+      } else if ((localQuote.updatedAt > serverQuote.updatedAt) && 
+                (localQuote.version > (serverQuote.version || 0))) {
+        // Local version is newer - update server
+        await this.updateQuote(localQuote.id, localQuote);
+      }
+    }
+    
+    // Get updated quotes from server
+    return this.getQuotes();
   }
 };
 
@@ -53,24 +108,55 @@ const syncStatus = document.getElementById('syncStatus');
 // Track sync state
 let isSyncing = false;
 
+// Fetch quotes from server with retry logic
+async function fetchQuotesFromServer(retryCount = 3) {
+  try {
+    showNotification('Fetching quotes from server...', 'info');
+    const serverQuotes = await serverApi.getQuotes();
+    return serverQuotes;
+  } catch (error) {
+    console.error('Failed to fetch quotes:', error);
+    if (retryCount > 0) {
+      showNotification(`Retrying... (${retryCount} attempts left)`, 'warning');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return fetchQuotesFromServer(retryCount - 1);
+    }
+    throw error;
+  }
+}
+
 // Initialize quotes after DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    // Load from local storage first
+    // Load from local storage first for immediate UI display
     const savedQuotes = localStorage.getItem(STORAGE_KEY);
     quotes = savedQuotes ? JSON.parse(savedQuotes) : [...defaultQuotes];
     
     // Initialize the app
     init();
     
-    // Show loading state
-    showNotification('Loading quotes from server...', 'info');
-    
-    // Initial sync with server
-    await syncWithServer();
+    // Initial sync with server in background
+    syncWithServer().catch(error => {
+      console.error('Initial sync failed:', error);
+      showNotification('Using offline data. Some features may be limited.', 'warning');
+    });
     
     // Set up periodic sync
-    setInterval(syncWithServer, SERVER_SYNC_INTERVAL);
+    setInterval(() => {
+      syncWithServer().catch(error => {
+        console.error('Periodic sync failed:', error);
+      });
+    }, SERVER_SYNC_INTERVAL);
+    
+    // Listen for online/offline events
+    window.addEventListener('online', () => {
+      showNotification('Back online. Syncing with server...', 'info');
+      syncWithServer().catch(console.error);
+    });
+    
+    window.addEventListener('offline', () => {
+      showNotification('You are currently offline. Working with local data.', 'warning');
+    });
     
   } catch (error) {
     console.error('Initialization error:', error);
@@ -252,63 +338,136 @@ function showRandomQuote() {
 
 // Show notification to user
 function showNotification(message, type = 'info') {
+  const notifications = document.getElementById('notifications');
+  if (!notifications) return;
+  
   const notification = document.createElement('div');
   notification.className = `notification ${type}`;
-  notification.textContent = message;
+  notification.innerHTML = `
+    <div class="notification-icon">
+      ${type === 'error' ? '❌' : type === 'warning' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️'}
+    </div>
+    <div class="notification-content">${message}</div>
+    <button class="notification-close">&times;</button>
+  `;
   
-  document.body.appendChild(notification);
+  // Add close button handler
+  const closeBtn = notification.querySelector('.notification-close');
+  closeBtn.addEventListener('click', () => {
+    notification.classList.add('fade-out');
+    setTimeout(() => notification.remove(), 300);
+  });
+  
+  notifications.appendChild(notification);
   
   // Auto-remove after 5 seconds
-  setTimeout(() => {
+  const timeout = setTimeout(() => {
     notification.classList.add('fade-out');
     setTimeout(() => notification.remove(), 300);
   }, 5000);
+  
+  // Keep notification on hover
+  notification.addEventListener('mouseenter', () => clearTimeout(timeout));
+  notification.addEventListener('mouseleave', () => {
+    const newTimeout = setTimeout(() => {
+      notification.classList.add('fade-out');
+      setTimeout(() => notification.remove(), 300);
+    }, 2000);
+    notification.dataset.timeout = newTimeout;
+  });
+}
+
+// Update last sync time display
+function updateLastSyncTime() {
+  const lastSync = localStorage.getItem(LAST_SYNC_KEY);
+  if (!lastSync) return;
+  
+  const syncTimeElement = document.getElementById('lastSyncTime');
+  if (syncTimeElement) {
+    const lastSyncDate = new Date(lastSync);
+    syncTimeElement.textContent = `Last synced: ${lastSyncDate.toLocaleTimeString()}`;
+    syncTimeElement.title = `Last sync: ${lastSyncDate.toString()}`;
+  }
 }
 
 // Sync local data with server
 async function syncWithServer() {
-  if (isSyncing) return;
+  if (isSyncing) return false;
   
   setSyncState(true);
   
   try {
     const lastSync = localStorage.getItem(LAST_SYNC_KEY);
-    showNotification('Syncing with server...', 'info');
     
-    // Get server data
-    const serverQuotes = await serverApi.getQuotes();
+    // 1. Fetch latest quotes from server
+    const serverQuotes = await fetchQuotesFromServer();
     
-    // Check for conflicts and resolve them
+    // 2. Check for conflicts and resolve them
     const { hasConflicts, resolvedQuotes } = await resolveConflicts(quotes, serverQuotes);
     
-    // Merge server quotes with local ones
+    // 3. Merge server quotes with local ones
     const mergedQuotes = mergeQuotes(quotes, resolvedQuotes);
     
-    // Only update if there are changes
+    // 4. Update local storage if there are changes
+    let changesDetected = false;
     if (JSON.stringify(quotes) !== JSON.stringify(mergedQuotes)) {
+      changesDetected = true;
+      const previousCount = quotes.length;
       quotes = mergedQuotes;
       saveQuotes();
       populateCategories();
       
+      // Show appropriate notification
       if (hasConflicts) {
-        showNotification('Resolved conflicts during sync', 'warning');
+        showNotification(`Resolved conflicts. ${quotes.length - previousCount} new/updated quotes.`, 'warning');
       } else {
-        showNotification('Quotes synced successfully', 'success');
+        showNotification(`Synced successfully. ${quotes.length - previousCount} new/updated quotes.`, 'success');
+      }
+      
+      // Update the UI if needed
+      if (categoryFilter.value === 'all') {
+        showRandomQuote();
+      } else {
+        filterQuote();
       }
     } else {
       showNotification('Already up to date', 'info');
     }
     
+    // 5. Push local changes to server
+    try {
+      const updatedServerQuotes = await serverApi.syncQuotes(quotes);
+      
+      // 6. Update local data with any server-side changes
+      if (updatedServerQuotes) {
+        const finalMerged = mergeQuotes(quotes, updatedServerQuotes);
+        if (JSON.stringify(quotes) !== JSON.stringify(finalMerged)) {
+          quotes = finalMerged;
+          saveQuotes();
+          showNotification('Updated with server changes', 'info');
+        }
+      }
+    } catch (syncError) {
+      console.error('Error pushing changes to server:', syncError);
+      showNotification('Changes saved locally but could not sync with server', 'warning');
+    }
+    
     // Update last sync time
     localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
+    updateLastSyncTime();
     
-    // In a real app, we would send local changes to the server here
-    await serverApi.syncQuotes(quotes);
+    return changesDetected;
     
-    return true;
   } catch (error) {
     console.error('Sync error:', error);
-    showNotification('Failed to sync with server', 'error');
+    
+    // Show appropriate error message
+    if (error.message.includes('network')) {
+      showNotification('Network error. Working offline.', 'error');
+    } else {
+      showNotification('Failed to sync with server', 'error');
+    }
+    
     return false;
   } finally {
     setSyncState(false);
