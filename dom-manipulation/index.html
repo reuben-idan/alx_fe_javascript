@@ -136,11 +136,12 @@
     </div>
     <div class="form-actions">
       <button onclick="addQuote()">Add Quote</button>
-      <button onclick="exportToJson()" class="secondary">Export Quotes</button>
-      <label class="file-upload">
-        Import Quotes
-        <input type="file" id="importFile" accept=".json" onchange="importFromJsonFile(event)" />
-      </label>
+      <button id="exportBtn">Export Quotes</button>
+      <input type="file" id="importFile" accept=".json" style="display: none;">
+      <button onclick="document.getElementById('importFile').click()">Import Quotes</button>
+      <button id="syncBtn" title="Sync with server">
+        <span id="syncIcon">🔄</span> <span id="syncStatus">Sync</span>
+      </button>
     </div>
   </div>
 
