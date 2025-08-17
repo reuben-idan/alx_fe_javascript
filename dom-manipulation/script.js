@@ -125,7 +125,7 @@ function init() {
   categoryFilter.addEventListener('change', filterQuotes);
   
   // Initialize categories dropdown
-  updateCategoryFilter();
+  populateCategories();
   
   // Create and append the form
   const form = createAddQuoteForm();
@@ -207,7 +207,7 @@ function addQuote() {
   saveQuotes();
   
   // Update UI and categories
-  updateCategoryFilter();
+  populateCategories();
   
   // If the new quote's category matches the current filter, show it
   const currentCategory = categoryFilter.value;
@@ -241,9 +241,9 @@ function addQuote() {
   }, 3000);
 }
 
-// Update category filter dropdown
-function updateCategoryFilter() {
-  // Get all unique categories
+// Extract unique categories and populate the dropdown
+function populateCategories() {
+  // Get all unique categories from quotes
   const categories = ['all', ...new Set(quotes.map(quote => quote.category))];
   
   // Get last selected category from local storage
@@ -267,13 +267,13 @@ function updateCategoryFilter() {
     categoryFilter.value = 'all';
     localStorage.setItem('lastSelectedCategory', 'all');
   }
-  
-  // Trigger filtering with the current selection
-  filterQuotes();
 }
 
-// Filter quotes based on selected category
-function filterQuotes() {
+// Alias for backward compatibility
+const updateCategoryFilter = populateCategories;
+
+// Filter and update displayed quotes based on selected category
+function filterQuote() {
   const selectedCategory = categoryFilter.value;
   
   // Save the selected category to local storage
@@ -289,7 +289,11 @@ function filterQuotes() {
   const filteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
   
   if (filteredQuotes.length === 0) {
-    quoteDisplay.innerHTML = `<p>No quotes found in category: <strong>${selectedCategory}</strong></p>`;
+    quoteDisplay.innerHTML = `
+      <div class="no-quotes">
+        <p>No quotes found in category: <strong>${selectedCategory}</strong></p>
+        <button onclick="addQuote()">Add a quote to this category</button>
+      </div>`;
     return;
   }
   
@@ -302,10 +306,14 @@ function filterQuotes() {
   
   // Display the quote
   quoteDisplay.innerHTML = `
-    <blockquote>"${randomQuote.text}"</blockquote>
-    <p><em>— ${randomQuote.category}</em></p>
-  `;
+    <div class="quote">
+      <blockquote>"${randomQuote.text}"</blockquote>
+      <p class="category"><em>— ${randomQuote.category}</em></p>
+    </div>`;
 }
+
+// Alias for backward compatibility
+const filterQuotes = filterQuote;
 
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
