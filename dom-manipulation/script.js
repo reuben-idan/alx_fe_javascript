@@ -31,17 +31,30 @@ function saveQuotes() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(quotes));
 }
 
-// Export quotes to JSON file
+// Export quotes to JSON file using Blob API
 function exportToJson() {
-  const dataStr = JSON.stringify(quotes, null, 2);
-  const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-  
-  const exportFileDefaultName = 'quotes-export.json';
-  
-  const linkElement = document.createElement('a');
-  linkElement.setAttribute('href', dataUri);
-  linkElement.setAttribute('download', exportFileDefaultName);
-  linkElement.click();
+  try {
+    const dataStr = JSON.stringify(quotes, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const dataUrl = URL.createObjectURL(dataBlob);
+    
+    const exportFileDefaultName = `quotes-export-${new Date().toISOString().slice(0, 10)}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.href = dataUrl;
+    linkElement.download = exportFileDefaultName;
+    document.body.appendChild(linkElement);
+    linkElement.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(linkElement);
+      URL.revokeObjectURL(dataUrl);
+    }, 100);
+  } catch (error) {
+    console.error('Error exporting quotes:', error);
+    alert('Failed to export quotes. Please try again.');
+  }
 }
 
 // Import quotes from JSON file
