@@ -110,28 +110,38 @@
 <body>
   <h1>Dynamic Quote Generator</h1>
   
-  <div>
-    <label for="categoryFilter">Filter by category: </label>
-    <select id="categoryFilter">
-      <option value="all">All Categories</option>
-    </select>
+  <div class="controls">
+    <div class="filter-container">
+      <label for="categoryFilter">Filter by category: </label>
+      <select id="categoryFilter">
+        <option value="all">All Categories</option>
+      </select>
+      <button id="newQuote">Show New Quote</button>
+    </div>
   </div>
   
   <div id="quoteDisplay">
     <p>Click the button below to see a random quote!</p>
   </div>
   
-  <button id="newQuote">Show New Quote</button>
-  
   <div class="quote-form">
-    <h3>Add New Quote</h3>
+    <h3>Quote Management</h3>
     <div>
+      <label for="newQuoteText">Quote:</label>
       <input id="newQuoteText" type="text" placeholder="Enter a new quote" required />
     </div>
-    <div style="margin-top: 10px;">
+    <div>
+      <label for="newQuoteCategory">Category:</label>
       <input id="newQuoteCategory" type="text" placeholder="Enter quote category" required />
     </div>
-    <button onclick="addQuote()">Add Quote</button>
+    <div class="form-actions">
+      <button onclick="addQuote()">Add Quote</button>
+      <button onclick="exportToJson()" class="secondary">Export Quotes</button>
+      <label class="file-upload">
+        Import Quotes
+        <input type="file" id="importFile" accept=".json" onchange="importFromJsonFile(event)" />
+      </label>
+    </div>
   </div>
 
   <script src="script.js"></script>
